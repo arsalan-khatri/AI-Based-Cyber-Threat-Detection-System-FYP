@@ -1,0 +1,247 @@
+<!-- wp:html -->
+<style>
+    h2 {
+        text-align: center;
+        margin-bottom: 25px;
+        color: #2c3e50;
+    }
+
+    input[type="file"] {
+        display: block;
+        margin: 20px auto;
+    }
+
+    .btn {
+        background-color: #3498db;
+        color: white;
+        padding: 12px 25px;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        display: block;
+        margin: 0 auto 30px auto;
+        font-size: 16px;
+        transition: background 0.3s;
+    }
+
+    .btn:hover {
+        background-color: #2980b9;
+    }
+
+    .box {
+        background: #ecf0f1;
+        padding: 20px;
+        border-left: 5px solid #3498db;
+        border-radius: 5px;
+        white-space: pre-wrap;
+        margin-bottom: 20px;
+        font-size: 14px;
+        max-height: 200px;
+        overflow: hidden;
+        overflow-y: auto;
+    }
+
+    .label {
+        font-weight: bold;
+        color: #2c3e50;
+        margin-bottom: 8px;
+        font-size: 15px;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 10px;
+        font-size: 14px;
+    }
+
+    th,
+    td {
+        border: 1px solid #bdc3c7;
+        padding: 8px;
+        text-align: center;
+    }
+
+    th {
+        background-color: #3498db;
+        color: white;
+    }
+
+    thead {
+        position: sticky;
+        top: -20px;
+    }
+</style>
+
+<div class="container">
+    <h2>Upload Data for LLM Prediction</h2>
+    <div class="pred">
+        <input id="csvFile" accept=".csv" type="file" />
+        <button class="btn" onclick="sendData()">Predict</button>
+    </div>
+
+    <div>
+        <div class="label">📊 Prediction Summary:</div>
+        <div id="summaryBox" class="box">Waiting for input...</div>
+
+        <div class="label">📋 Detailed Prediction Table:</div>
+        <div id="predictionBox" class="box">No data yet.</div>
+
+        <div class="label">🧠 LLM Suggestion:</div>
+        <button id="llmBtn" class="btn" style="display: none;" onclick="getLLMSuggestion()">Get LLM Suggestion</button>
+        <div id="llmSuggestionBox" class="box">No suggestion fetched yet.</div>
+
+        <a href="https://cyberguard.akdeepknowledge.com/chatgpt/" target="_blank">
+            <button>💬 Chat with AI Cyber Expert Advisor</button>
+        </a>
+    </div>
+</div>
+
+<!-- Optional Chat UI -->
+<div id="chatbox" style="display: none; max-width: 600px; margin: 20px auto;">
+    <div class="box" id="chatLog">🔒 Start your cybersecurity chat below:</div>
+    <input type="text" id="chatInput" placeholder="Ask your question..."
+        style="width: 100%; padding: 10px; margin-top: 10px;" />
+    <button class="btn" onclick="sendMessage()">Send</button>
+</div>
+
+<script>
+    let lastData = null;
+
+    function sendData() {
+        const fileInput = document.getElementById('csvFile');
+        const reader = new FileReader();
+
+        reader.onload = function (event) {
+            const csv = event.target.result;
+            const rows = csv.split('\n');
+            const headers = rows[0].split(',');
+
+            const jsonData = rows.slice(1).filter(Boolean).map(row => {
+                const values = row.split(',');
+                const obj = {};
+                headers.forEach((h, i) => (obj[h.trim()] = values[i]?.trim() || ""));
+                return obj;
+            });
+
+            lastData = jsonData;
+
+            fetch('http://127.0.0.1:8000/api/predict-only/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ data: jsonData }),
+            })
+                .then(res => res.json())
+                .then(data => {
+                    const summaryText = `
+Total Samples: ${data.total}
+Attack Count: ${data.attack_count}
+Benign Count: ${data.benign_count}
+Attack Percentage: ${data.attack_percentage}%`.trim();
+
+                    document.getElementById('summaryBox').textContent = summaryText;
+
+                    const predictions = data.result_data;
+                    if (predictions && predictions.length > 0) {
+                        let table = `<table><thead><tr>
+              <th>#</th>
+              <th>Prediction</th>
+              <th>Attack Confidence</th>
+              <th>Entropy</th>
+              <th>Margin</th>
+            </tr></thead><tbody>`;
+
+                        predictions.forEach((item, i) => {
+                            table += `<tr>
+                <td>${i + 1}</td>
+                <td>${item.prediction}</td>
+                <td>${(item.attack_confidence * 100).toFixed(2)}%</td>
+                <td>${item.entropy}</td>
+                <td>${item.margin}%</td>
+              </tr>`;
+                        });
+
+                        table += "</tbody></table>";
+                        document.getElementById('predictionBox').innerHTML = table;
+                    } else {
+                        document.getElementById('predictionBox').textContent = "No prediction data available.";
+                    }
+
+                    document.getElementById('llmSuggestionBox').textContent = "No suggestion fetched yet.";
+                    document.getElementById('llmBtn').style.display = "block";
+                })
+                .catch(err => alert("❌ Error: " + err));
+        };
+
+        if (fileInput.files.length > 0) {
+            reader.readAsText(fileInput.files[0]);
+        } else {
+            alert("Please select a CSV file");
+        }
+    }
+
+    function typeText(element, text, delay = 30) {
+        element.textContent = "";
+        let i = 0;
+        function type() {
+            if (i < text.length) {
+                element.textContent += text.charAt(i);
+                i++;
+                setTimeout(type, delay);
+            }
+        }
+        type();
+    }
+
+    function getLLMSuggestion() {
+        if (!lastData) {
+            alert("❌ Please upload and predict data first.");
+            return;
+        }
+
+        const btn = document.getElementById('llmBtn');
+        const suggestionBox = document.getElementById('llmSuggestionBox');
+        btn.disabled = true;
+        btn.textContent = "Thinking";
+
+        let dotCount = 0;
+        const loadingInterval = setInterval(() => {
+            dotCount = (dotCount + 1) % 4;
+            btn.textContent = "Thinking" + ".".repeat(dotCount);
+        }, 400);
+
+        const summaryBox = document.getElementById('summaryBox').textContent;
+        const attackCount = parseInt(summaryBox.match(/Attack Count: (\d+)/)?.[1] || 0);
+        const benignCount = parseInt(summaryBox.match(/Benign Count: (\d+)/)?.[1] || 0);
+        const attackPercentage = parseFloat(summaryBox.match(/Attack Percentage: ([\d.]+)/)?.[1] || 0);
+        const total = parseInt(summaryBox.match(/Total Samples: (\d+)/)?.[1] || 0);
+
+        fetch('http://127.0.0.1:8000/api/azure-llm-suggest/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                attack_percentage: attackPercentage,
+                attack_count: attackCount,
+                benign_count: benignCount,
+                total: total,
+            }),
+        })
+            .then((res) => res.json())
+            .then((data) => {
+                clearInterval(loadingInterval);
+                btn.disabled = false;
+                btn.textContent = "Get LLM Suggestion";
+                const suggestion = data.llm_suggestion || "No suggestion returned.";
+                typeText(suggestionBox, suggestion, 30);
+            })
+            .catch((err) => {
+                clearInterval(loadingInterval);
+                btn.disabled = false;
+                btn.textContent = "Get LLM Suggestion";
+                alert("❌ Error: " + err);
+            });
+    }
+
+</script>
+
+<!-- /wp:html -->
