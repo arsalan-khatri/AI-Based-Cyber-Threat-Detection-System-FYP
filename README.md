@@ -22,14 +22,6 @@ Is project ka main maqsad network traffic ko real-time mein analyze karna aur ma
 
 ---
 
-### Model Performance
-Project ke evaluation phase mein model ne behtar results show kiye hain:
-* **Accuracy:** [Apni Accuracy % yahan likhein, e.g., 96.5%]
-* **Precision:** High precision in identifying malicious packets.
-* **Recall:** Optimized to ensure no critical threat goes undetected.
-
----
-
 ### Getting Started
 
 1. **Clone the Repository:**
